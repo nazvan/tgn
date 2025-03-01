@@ -1,0 +1,6 @@
+python-telegram-bot==13.12
+celery==5.2.7
+redis==4.3.4
+sqlalchemy==1.4.42
+telethon==1.25.4
+python-dotenv==0.21.0 
