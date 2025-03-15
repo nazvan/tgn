@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import mimetypes
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
@@ -185,17 +186,85 @@ async def process_edit_text(message: types.Message, state: FSMContext):
     # Формируем новое сообщение с обновленным текстом
     message_text = f"📢 <b>Новость №{news.id}</b> из канала <b>{news.source_channel}</b> (отредактирована):\n\n{news.content}"
     
-    # Если у новости есть медиа, отправляем с медиа
-    if news.has_media and news.media_path and os.path.exists(news.media_path):
-        if news.media_type == 'photo':
-            with open(news.media_path, 'rb') as photo:
-                await message.answer_photo(photo, caption=message_text, reply_markup=markup, parse_mode="HTML")
-        elif news.media_type == 'document':
-            with open(news.media_path, 'rb') as doc:
-                await message.answer_document(doc, caption=message_text, reply_markup=markup, parse_mode="HTML")
-    else:
-        # Иначе отправляем просто текст
-        await message.answer(message_text, reply_markup=markup, parse_mode="HTML")
+    try:
+        # Если у новости есть медиа, отправляем с медиа
+        if news.has_media and news.media_path and os.path.exists(news.media_path):
+            logger.info(f"Отправка отредактированной новости {news.id} с медиа {news.media_path}")
+            
+            if news.media_type == 'photo':
+                try:
+                    # Сначала читаем файл в память
+                    with open(news.media_path, 'rb') as file:
+                        file_content = file.read()
+                    
+                    logger.info(f"Файл {news.media_path} прочитан в память, размер: {len(file_content)} байт")
+                    
+                    # Отправляем фото из памяти
+                    await message.answer_photo(
+                        photo=file_content,
+                        caption=message_text,
+                        reply_markup=markup,
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"Фото для новости {news.id} успешно отправлено после редактирования")
+                except Exception as e:
+                    logger.error(f"Ошибка при отправке фото после редактирования: {e}")
+                    # Отправляем текст без фото при ошибке
+                    await message.answer(
+                        f"{message_text}\n\n⚠️ <i>Не удалось отобразить фото: {str(e)}</i>", 
+                        reply_markup=markup, 
+                        parse_mode="HTML"
+                    )
+            elif news.media_type == 'document':
+                try:
+                    # Сначала читаем файл в память
+                    with open(news.media_path, 'rb') as file:
+                        file_content = file.read()
+                    
+                    # Определяем тип файла для корректного отображения
+                    mime_type = mimetypes.guess_type(news.media_path)[0]
+                    filename = os.path.basename(news.media_path)
+                    
+                    logger.info(f"Документ {filename} прочитан в память, размер: {len(file_content)} байт, тип: {mime_type}")
+                    
+                    if mime_type and mime_type.startswith('image/'):
+                        # Если это изображение, отправляем как фото для лучшего отображения
+                        await message.answer_photo(
+                            photo=file_content, 
+                            caption=message_text, 
+                            reply_markup=markup, 
+                            parse_mode="HTML"
+                        )
+                    else:
+                        # Иначе отправляем как документ
+                        await message.answer_document(
+                            document=file_content, 
+                            caption=message_text, 
+                            reply_markup=markup, 
+                            parse_mode="HTML"
+                        )
+                    logger.info(f"Документ для новости {news.id} успешно отправлен после редактирования")
+                except Exception as e:
+                    logger.error(f"Ошибка при отправке документа после редактирования: {e}")
+                    # Отправляем текст без документа при ошибке
+                    await message.answer(
+                        f"{message_text}\n\n⚠️ <i>Не удалось отобразить документ: {str(e)}</i>", 
+                        reply_markup=markup, 
+                        parse_mode="HTML"
+                    )
+        else:
+            # Иначе отправляем просто текст
+            logger.info(f"Отправка отредактированной новости {news.id} без медиа")
+            await message.answer(message_text, reply_markup=markup, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Общая ошибка при отправке отредактированной новости {news.id}: {e}")
+        # Гарантированно отправляем сообщение в случае ошибки
+        await message.answer(
+            f"📢 <b>Новость №{news.id}</b> из канала <b>{news.source_channel}</b> (отредактирована):\n\n"
+            f"{news.content}\n\n⚠️ <i>Произошла ошибка при отображении: {str(e)}</i>",
+            reply_markup=markup,
+            parse_mode="HTML"
+        )
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith(('approve_', 'reject_', 'delete_', 'dummy_')))
@@ -335,29 +404,47 @@ async def publish_news(news):
                 target_channel = f'@{target_channel}'  # Добавляем @ если это username без @
         
         if news.has_media and news.media_path and os.path.exists(news.media_path):
+            logger.info(f"Публикация новости {news.id} с медиафайлом {news.media_path} в канал {target_channel}")
+            
+            # Читаем файл в память перед отправкой
+            with open(news.media_path, 'rb') as file:
+                file_content = file.read()
+            
+            logger.info(f"Файл {news.media_path} прочитан в память для публикации, размер: {len(file_content)} байт")
+            
             # Отправляем сообщение с медиа через бота
             if news.media_type == 'photo':
-                with open(news.media_path, 'rb') as photo:
+                return await bot.send_photo(
+                    chat_id=target_channel,
+                    photo=file_content,
+                    caption=news.content
+                )
+            elif news.media_type == 'document':
+                # Определяем тип файла
+                mime_type = mimetypes.guess_type(news.media_path)[0]
+                
+                # Если это изображение, отправляем как фото для лучшего отображения
+                if mime_type and mime_type.startswith('image/'):
                     return await bot.send_photo(
                         chat_id=target_channel,
-                        photo=photo,
+                        photo=file_content,
                         caption=news.content
                     )
-            elif news.media_type == 'document':
-                with open(news.media_path, 'rb') as doc:
+                else:
                     return await bot.send_document(
                         chat_id=target_channel,
-                        document=doc,
+                        document=file_content,
                         caption=news.content
                     )
         else:
             # Отправляем текстовое сообщение через бота
+            logger.info(f"Публикация текстовой новости {news.id} в канал {target_channel}")
             return await bot.send_message(
                 chat_id=target_channel,
                 text=news.content
             )
     except Exception as e:
-        logger.error(f"Ошибка при публикации: {e}")
+        logger.error(f"Ошибка при публикации новости {news.id}: {e}")
         raise
 
 
