@@ -1,7 +1,7 @@
-python-telegram-bot==13.12
-celery==5.2.7
-redis==4.3.4
-sqlalchemy==1.4.42
-telethon==1.25.4
-python-dotenv==0.21.0
-tabulate==0.9.0 
+telethon==1.31.1
+aiogram==2.25.1
+sqlalchemy==2.0.23
+aiohttp==3.8.6
+cryptg==0.4.0  # опциональная зависимость для ускорения работы Telethon
+pillow==10.1.0  # для работы с изображениями
+python-dotenv==1.0.0  # для работы с .env файлами 

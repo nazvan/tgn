@@ -1,0 +1,41 @@
+# Виртуальное окружение
+venv/
+env/
+ENV/
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Файлы сессий Telethon
+*.session
+*.session-journal
+
+# Файлы локальной конфигурации
+.env
+.env.local
+
+# База данных
+*.db
+*.sqlite
+*.sqlite3
+
+# Медиафайлы и загрузки
+media/
+
+# Логи
+*.log
+app.log
+
+# Файлы IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store 

@@ -1,22 +1,28 @@
+# Конфигурационный файл
+
 import os
 from dotenv import load_dotenv
+from typing import List
 
-# Загрузка переменных окружения
+# Загружаем переменные окружения из файла .env
 load_dotenv()
 
-# Настройки Telegram бота
-TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')
-ADMIN_IDS = list(map(int, os.getenv('ADMIN_IDS', '').split(',')))
+# Данные для Telethon
+API_ID = os.getenv('API_ID')  # Получите от https://my.telegram.org/
+API_HASH = os.getenv('API_HASH')  # Получите от https://my.telegram.org/
+PHONE_NUMBER = os.getenv('PHONE_NUMBER')  # Ваш номер телефона в формате +79123456789
+
+# Данные для бота TelegramBotAPI
+BOT_TOKEN = os.getenv('BOT_TOKEN')  # Получите от @BotFather
+
+# Каналы для парсинга (usernames без @)
+SOURCE_CHANNELS = os.getenv('SOURCE_CHANNELS', '').split(',')
+
+# Канал для публикации новостей
+TARGET_CHANNEL = os.getenv('TARGET_CHANNEL')  # Укажите username канала без @ или ID канала
+
+# ID пользователей, которые могут модерировать новости
+MODERATOR_IDS = [int(id) for id in os.getenv('MODERATOR_IDS', '').split(',') if id]
 
 # Настройки базы данных
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///tg_bot.db')
-
-# Настройки Redis и Celery
-REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
-
-# Константы для управления статусами воркеров
-WORKER_STATUS_KEY_PREFIX = "worker_status:"
-WORKER_LAST_SEEN_KEY_PREFIX = "worker_last_seen:"
-WORKER_ONLINE_TIMEOUT = 60  # секунд, после которых воркер считается неактивным 
+DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///telegram_news.db') 
