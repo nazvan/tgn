@@ -42,6 +42,18 @@ def update_worker_status(db: Session, worker_id: int, is_active: bool):
         db.refresh(worker)
     return worker
 
+def delete_worker(db: Session, worker_id: int):
+    """Удаление воркера"""
+    worker = get_worker(db, worker_id)
+    if worker:
+        # Удаляем связанные аккаунты
+        for account in worker.accounts:
+            db.delete(account)
+        db.delete(worker)
+        db.commit()
+        return True
+    return False
+
 # Операции с аккаунтами
 def create_account(db: Session, phone: str, api_id: str, api_hash: str, worker_id: int, session_string: str = None):
     """Создание нового аккаунта"""
@@ -88,4 +100,11 @@ def update_account_session(db: Session, account_id: int, session_string: str):
         account.session_string = session_string
         db.commit()
         db.refresh(account)
-    return account 
+    return account
+
+def get_all_accounts(db: Session, active_only: bool = False):
+    """Получение всех аккаунтов"""
+    query = db.query(Account)
+    if active_only:
+        query = query.filter(Account.is_active == True)
+    return query.all() 

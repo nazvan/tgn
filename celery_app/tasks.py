@@ -1,5 +1,5 @@
 from celery import Celery
-from config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
+from config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND, WORKER_STATUS_KEY_PREFIX, WORKER_LAST_SEEN_KEY_PREFIX, WORKER_ONLINE_TIMEOUT
 from celery.result import AsyncResult
 import redis
 import json
@@ -14,9 +14,6 @@ celery_app = Celery(
 
 # Инициализация Redis для хранения статусов воркеров
 redis_client = redis.from_url(CELERY_RESULT_BACKEND)
-WORKER_STATUS_KEY_PREFIX = "worker_status:"
-WORKER_LAST_SEEN_KEY_PREFIX = "worker_last_seen:"
-WORKER_ONLINE_TIMEOUT = 60  # секунд, после которых воркер считается неактивным
 
 # Задачи для управления воркерами
 
@@ -177,9 +174,42 @@ def stop_account(worker_name, account_id):
 @celery_app.task(name='account.status')
 def check_account_status(worker_name, account_id):
     """Задача для проверки статуса аккаунта на воркере"""
-    # В реальном приложении здесь будет логика проверки статуса аккаунта
+    # Отправляем задачу получения статуса аккаунта на конкретный воркер
+    try:
+        result = celery_app.send_task(
+            'worker.get_account_status',
+            args=[account_id],
+            kwargs={},
+            queue=worker_name,
+            expires=5
+        )
+        status_data = result.get(timeout=5)
+        
+        if status_data and status_data.get('status') == 'success':
+            account_info = status_data.get('data', {})
+            return {
+                'status': 'active' if account_info.get('is_running', False) else 'inactive',
+                'is_connected': account_info.get('is_connected', False),
+                'messages_count': account_info.get('messages_count', 0),
+                'has_session': account_info.get('has_session', False),
+                'worker': worker_name,
+                'account_id': account_id,
+                'time': int(time.time())
+            }
+    except Exception as e:
+        # В случае ошибки возвращаем информацию об ошибке
+        return {
+            'status': 'error',
+            'error': str(e),
+            'worker': worker_name,
+            'account_id': account_id,
+            'time': int(time.time())
+        }
+    
+    # Если не удалось получить данные, возвращаем статус unknown
     return {
-        'status': 'running',
+        'status': 'unknown',
         'worker': worker_name,
-        'account_id': account_id
+        'account_id': account_id,
+        'time': int(time.time())
     } 

@@ -7,9 +7,33 @@ from celery.signals import worker_ready, worker_shutting_down
 from celery.schedules import crontab
 from .telethon_manager import TelethonManager
 import redis
+import pathlib
+from dotenv import load_dotenv, set_key
 
-# Получение имени воркера из переменной окружения или использование значения по умолчанию
-WORKER_NAME = os.getenv('WORKER_NAME', 'worker_' + str(int(time.time())))
+# Путь к .env файлу в директории worker
+ENV_FILE_PATH = pathlib.Path(__file__).parent / '.env'
+
+# Загружаем переменные из .env файла, если он существует
+if ENV_FILE_PATH.exists():
+    load_dotenv(ENV_FILE_PATH)
+
+# Получение имени воркера из переменной окружения или создание нового
+WORKER_NAME = os.getenv('WORKER_NAME')
+if not WORKER_NAME:
+    # Если имя воркера не задано, создаем новое и сохраняем его в .env файл
+    WORKER_NAME = 'worker_' + str(int(time.time()))
+    # Создаем .env файл, если его нет
+    if not ENV_FILE_PATH.exists():
+        with open(ENV_FILE_PATH, 'w') as f:
+            f.write(f'WORKER_NAME={WORKER_NAME}\n')
+    else:
+        # Обновляем существующий .env файл
+        set_key(ENV_FILE_PATH, 'WORKER_NAME', WORKER_NAME)
+    
+    print(f"Создан новый ID воркера: {WORKER_NAME}, сохранен в {ENV_FILE_PATH}")
+else:
+    print(f"Загружен существующий ID воркера: {WORKER_NAME}")
+
 SERVER_ADDRESS = os.getenv('SERVER_ADDRESS', 'localhost')
 
 # Настройка Celery и Redis
