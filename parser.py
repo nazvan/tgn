@@ -162,8 +162,7 @@ class NewsParser:
                     "inline_keyboard": [
                         [
                             {"text": "✅ Одобрить и опубликовать", "callback_data": f"approve_{news.id}"},
-                            {"text": "✏️ Редактировать", "callback_data": f"edit_{news.id}"},
-                            {"text": "❌ Отклонить", "callback_data": f"reject_{news.id}"}
+                            {"text": "✏️ Редактировать", "callback_data": f"edit_{news.id}"}
                         ]
                     ]
                 }

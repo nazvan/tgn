@@ -39,7 +39,7 @@ async def cmd_start(message: types.Message):
     await message.reply(
         "Привет! Я бот для модерации новостей из телеграм-каналов.\n\n"
         "Я буду автоматически присылать вам новости, как только они появятся в отслеживаемых каналах. "
-        "Вы сможете сразу одобрить или отклонить их."
+        "Вы сможете сразу одобрить или отредактировать их."
     )
 
 
@@ -60,8 +60,7 @@ async def cmd_help(message: types.Message):
         "<b>Действия с новостями:</b>\n"
         "✅ <i>Одобрить</i> - Новость будет опубликована в целевой канал\n"
         "✏️ <i>Редактировать</i> - Изменить текст новости перед публикацией\n"
-        "❌ <i>Отклонить</i> - Новость не будет опубликована\n"
-        "🗑️ <i>Удалить</i> - Удалить опубликованную новость из целевого канала\n\n"
+        "🗑️ <i>Удалить</i> - Удалить опубликованную новость из канала (она вернется в очередь на публикацию)\n\n"
         "Новости публикуются в канал <b>{}</b>".format(TARGET_CHANNEL),
         parse_mode="HTML"
     )
@@ -78,21 +77,15 @@ async def cmd_stats(message: types.Message):
     
     # Получаем статистику
     total_news = session.query(News).count()
-    reviewed_news = session.query(News).filter(News.is_reviewed == True).count()
-    approved_news = session.query(News).filter(News.is_approved == True).count()
-    rejected_news = session.query(News).filter(News.is_reviewed == True, News.is_approved == False).count()
-    pending_news = session.query(News).filter(News.is_reviewed == False).count()
     published_news = session.query(News).filter(News.is_published == True).count()
+    pending_news = session.query(News).filter(News.is_published == False).count()
     
     # Формируем сообщение со статистикой
     stats_message = (
         "📊 <b>Статистика модерации</b>\n\n"
         f"Всего новостей: <b>{total_news}</b>\n"
-        f"Просмотрено: <b>{reviewed_news}</b>\n"
-        f"Одобрено: <b>{approved_news}</b>\n"
-        f"Отклонено: <b>{rejected_news}</b>\n"
-        f"Ожидает проверки: <b>{pending_news}</b>\n"
-        f"Опубликовано: <b>{published_news}</b>"
+        f"Опубликовано: <b>{published_news}</b>\n"
+        f"Ожидает публикации: <b>{pending_news}</b>\n"
     )
     
     await message.reply(stats_message, parse_mode="HTML")
@@ -175,12 +168,11 @@ async def process_edit_text(message: types.Message, state: FSMContext):
         parse_mode="HTML"
     )
     
-    # Отправляем новую клавиатуру с кнопками для одобрения/отклонения
-    markup = InlineKeyboardMarkup(row_width=3)
+    # Отправляем новую клавиатуру с кнопками для одобрения
+    markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
-        InlineKeyboardButton("✅ Одобрить", callback_data=f"approve_{news_id}"),
-        InlineKeyboardButton("✏️ Редактировать", callback_data=f"edit_{news_id}"),
-        InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{news_id}")
+        InlineKeyboardButton("Опубликовать", callback_data=f"approve_{news_id}"),
+        InlineKeyboardButton("Редактировать", callback_data=f"edit_{news_id}")
     )
     
     # Формируем новое сообщение с обновленным текстом
@@ -267,7 +259,7 @@ async def process_edit_text(message: types.Message, state: FSMContext):
         )
 
 
-@dp.callback_query_handler(lambda c: c.data.startswith(('approve_', 'reject_', 'delete_', 'dummy_')))
+@dp.callback_query_handler(lambda c: c.data.startswith(('approve_', 'delete_', 'dummy_')))
 async def process_review_callback(callback_query: types.CallbackQuery):
     """Обрабатывает результаты рецензирования и удаления"""
     user_id = callback_query.from_user.id
@@ -305,8 +297,8 @@ async def process_review_callback(callback_query: types.CallbackQuery):
                 # Обновляем клавиатуру с кнопками
                 markup = InlineKeyboardMarkup(row_width=2)
                 markup.add(
-                    InlineKeyboardButton("✅ Опубликовано", callback_data=f"dummy_{news.id}"),
-                    InlineKeyboardButton("🗑️ Удалить", callback_data=f"delete_{news.id}")
+                    InlineKeyboardButton("Опубликовано", callback_data=f"dummy_{news.id}"),
+                    InlineKeyboardButton("Удалить", callback_data=f"delete_{news.id}")
                 )
                 
                 # Обновляем сообщение с новой клавиатурой
@@ -324,24 +316,6 @@ async def process_review_callback(callback_query: types.CallbackQuery):
             news.is_approved = False
             session.commit()
             
-    elif action == 'reject':
-        # Отклоняем новость
-        news.is_reviewed = True
-        news.is_approved = False
-        session.commit()
-        
-        await bot.answer_callback_query(callback_query.id, "Новость отклонена.")
-        
-        # Обновляем клавиатуру
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("❌ Отклонено", callback_data=f"dummy_{news.id}"))
-        
-        await bot.edit_message_reply_markup(
-            chat_id=callback_query.message.chat.id,
-            message_id=callback_query.message.message_id,
-            reply_markup=markup
-        )
-        
     elif action == 'delete':
         # Удаляем опубликованную новость из целевого канала
         if news.is_published and news.published_message_id:
@@ -358,17 +332,20 @@ async def process_review_callback(callback_query: types.CallbackQuery):
                     message_id=news.published_message_id
                 )
                 
-                # Обновляем статус в базе данных
+                # Обновляем статус в базе данных - возвращаем новость в исходное состояние
                 news.is_published = False
                 news.published_message_id = None
+                news.is_reviewed = False
+                news.is_approved = False
                 session.commit()
                 
-                await bot.answer_callback_query(callback_query.id, "Новость удалена из канала.")
+                await bot.answer_callback_query(callback_query.id, "Новость удалена из канала и возвращена в очередь на публикацию.")
                 
-                # Обновляем клавиатуру
-                markup = InlineKeyboardMarkup()
+                # Обновляем клавиатуру для возможности редактирования и повторной публикации
+                markup = InlineKeyboardMarkup(row_width=2)
                 markup.add(
-                    InlineKeyboardButton("✅ Одобрено, публикация удалена", callback_data=f"dummy_{news.id}")
+                    InlineKeyboardButton("Опубликовать", callback_data=f"approve_{news.id}"),
+                    InlineKeyboardButton("Редактировать", callback_data=f"edit_{news.id}")
                 )
                 
                 await bot.edit_message_reply_markup(
