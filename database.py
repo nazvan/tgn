@@ -19,6 +19,7 @@ class News(Base):
     message_id = Column(Integer, nullable=False)  # ID сообщения в исходном канале
     date = Column(DateTime, default=datetime.datetime.now)
     content = Column(Text, nullable=False)  # Содержание новости
+    original_content = Column(Text, nullable=True)  # Оригинальный текст новости
     has_media = Column(Boolean, default=False)  # Есть ли медиа в новости
     media_type = Column(String(20), nullable=True)  # Тип медиа (photo, video, etc.)
     media_path = Column(String(255), nullable=True)  # Путь к сохраненному медиафайлу

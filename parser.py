@@ -139,6 +139,7 @@ class NewsParser:
             source_channel=chat.username or str(chat.id),
             message_id=message.id,
             content=content,
+            original_content=content,  # Сохраняем оригинальный текст
             has_media=has_media,
             media_type=media_type,
             media_path=media_path
